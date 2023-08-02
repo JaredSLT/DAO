@@ -3,6 +3,7 @@ package tech.tresearchgroup.dao.controller.types;
 import com.zaxxer.hikari.HikariDataSource;
 import tech.tresearchgroup.dao.controller.BaseDAO;
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
+import tech.tresearchgroup.systemframework.model.KeyValue;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -78,6 +79,11 @@ public class SQLiteDatabaseType extends BaseDAO implements DatabaseType {
     }
 
     @Override
+    public List select(int maxResultsSize, List<KeyValue> clauses, String returnColumn, Class theClass) throws SQLException {
+        return null;
+    }
+
+    @Override
     public boolean createRelationship(Object firstObject, Object secondObject, String secondObjectName) throws SQLException, InvocationTargetException, IllegalAccessException {
         return false;
     }
@@ -114,6 +120,11 @@ public class SQLiteDatabaseType extends BaseDAO implements DatabaseType {
 
     @Override
     public Object getFromResultSet(ResultSet resultSet, Object object) throws InvocationTargetException, IllegalAccessException, SQLException, InstantiationException {
+        return null;
+    }
+
+    @Override
+    public Object getIdFromUnique(String key, String value, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException {
         return null;
     }
 }

@@ -12,8 +12,6 @@ import java.util.List;
 import java.util.Objects;
 
 public class ReflectionMethods {
-    private static final Logger logger = LoggerFactory.getLogger(ReflectionMethods.class);
-
     public static Object getNewInstance(Class theClass) throws InvocationTargetException, InstantiationException, IllegalAccessException {
         Constructor[] constructors = theClass.getConstructors();
         for (Constructor constructor : constructors) {
@@ -28,7 +26,7 @@ public class ReflectionMethods {
         try {
             return theClass.getMethod("getId");
         } catch (NoSuchMethodException e) {
-            logger.info("Failed to execute: getId on: " + theClass.getSimpleName());
+            System.out.println("Failed to execute: getId on: " + theClass.getSimpleName());
         }
         return null;
     }
@@ -41,7 +39,7 @@ public class ReflectionMethods {
             }
             return theClass.getMethod("get" + cap);
         } catch (NoSuchMethodException e) {
-            logger.info("Failed to execute: get" + cap + " on: " + theClass.getSimpleName());
+            System.out.println("Failed to execute: get" + cap + " on: " + theClass.getSimpleName());
         }
         return null;
     }
@@ -51,7 +49,7 @@ public class ReflectionMethods {
         try {
             return theClass.getMethod("set" + cap, parameterClass);
         } catch (NoSuchMethodException e) {
-            logger.info("Failed to execute: set" + cap + " on: " + theClass.getSimpleName());
+            System.out.println("Failed to execute: set" + cap + " on: " + theClass.getSimpleName());
         }
         return null;
     }
@@ -63,7 +61,7 @@ public class ReflectionMethods {
             }
             return theClass.getMethod("valueOf", String.class).invoke(theClass, data);
         } catch (NoSuchMethodException e) {
-            logger.info("Failed to execute: valueOf on: " + theClass.getSimpleName());
+            System.out.println("Failed to execute: valueOf on: " + theClass.getSimpleName());
         }
         return null;
     }
@@ -72,7 +70,7 @@ public class ReflectionMethods {
         try {
             return theClass.getMethod("setId", parameterClass);
         } catch (NoSuchMethodException e) {
-            logger.info("Failed to execute: setId on: " + theClass.getSimpleName());
+            System.out.println("Failed to execute: setId on: " + theClass.getSimpleName());
         }
         return null;
     }

@@ -1,6 +1,7 @@
 package tech.tresearchgroup.dao.controller;
 
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
+import tech.tresearchgroup.systemframework.model.KeyValue;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
@@ -30,6 +31,8 @@ public interface GenericDatabaseAccessObject {
 
     List search(int maxResultsSize, String query, String returnColumn, String searchColumn, Class theClass) throws SQLException;
 
+    List select(int maxResultsSize, List<KeyValue> clauses, String returnColumn, Class theClass) throws SQLException;
+
     boolean createRelationship(Object firstObject, Object secondObject, String secondObjectName) throws SQLException, InvocationTargetException, IllegalAccessException;
 
     Object getObjectId(Object object) throws SQLException, InvocationTargetException, IllegalAccessException, InstantiationException;
@@ -38,9 +41,11 @@ public interface GenericDatabaseAccessObject {
 
     Long getTotalPages(int maxResultsSize, Class theClass) throws SQLException;
 
-    boolean createTables(Class theClass);
+    boolean createTables(Class theClass) throws SQLException;
 
     Object getFromResultSet(ResultSet resultSet, Object object) throws InvocationTargetException, IllegalAccessException, SQLException, InstantiationException;
 
     List<BasicObjectInterface> getAllFromResultSet(ResultSet resultSet, Class theClass, boolean full) throws SQLException;
+
+    Object getIdFromUnique(String key, String value, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException;
 }

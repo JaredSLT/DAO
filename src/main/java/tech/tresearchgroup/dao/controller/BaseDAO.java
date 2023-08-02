@@ -17,8 +17,6 @@ import java.util.LinkedList;
 import java.util.List;
 
 public abstract class BaseDAO {
-    private static final Logger logger = LoggerFactory.getLogger(BaseDAO.class);
-
     protected boolean hasRelationships(Field[] fields) {
         for (Field field : fields) {
             if (field.getType().toString().equals("interface java.util.List")) {
@@ -95,7 +93,6 @@ public abstract class BaseDAO {
                         databaseType.create(listObject);
                     }
                     List withIds = databaseType.getObjectByIds(list);
-                    logger.info(withIds.toString());
                     if (withIds.size() > 0) {
                         for (Object listObject : withIds) {
                             databaseType.createRelationship(object, listObject, field.getName());

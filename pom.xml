@@ -13,21 +13,6 @@
         <maven.compiler.target>17</maven.compiler.target>
     </properties>
 
-    <distributionManagement>
-        <repository>
-            <id>TRG</id>
-            <url>https://maven.tresearchgroup.tech/releases</url>
-        </repository>
-    </distributionManagement>
-
-    <repositories>
-        <repository>
-            <id>TRGRepo-releases</id>
-            <name>The TRG repository</name>
-            <url>https://maven.tresearchgroup.tech/releases</url>
-        </repository>
-    </repositories>
-
     <build>
         <plugins>
             <plugin>
@@ -88,6 +73,11 @@
             <groupId>org.mariadb.jdbc</groupId>
             <artifactId>mariadb-java-client</artifactId>
             <version>3.0.6</version>
+        </dependency>
+        <dependency>
+            <groupId>tech.tresearchgroup.systemframework</groupId>
+            <artifactId>systemframework</artifactId>
+            <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
 </project>

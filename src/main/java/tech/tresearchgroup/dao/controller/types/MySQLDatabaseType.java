@@ -1,11 +1,10 @@
 package tech.tresearchgroup.dao.controller.types;
 
 import com.zaxxer.hikari.HikariDataSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tech.tresearchgroup.dao.controller.BaseDAO;
 import tech.tresearchgroup.dao.controller.ReflectionMethods;
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
+import tech.tresearchgroup.systemframework.model.KeyValue;
 
 import java.lang.reflect.*;
 import java.sql.Connection;
@@ -17,7 +16,6 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
-    private static final Logger logger = LoggerFactory.getLogger(MySQLDatabaseType.class);
     private final HikariDataSource hikariDataSource;
 
     public MySQLDatabaseType(HikariDataSource hikariDataSource) {
@@ -26,48 +24,45 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
 
     @Override
     public boolean create(Object object) throws SQLException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException {
-        Connection connection = hikariDataSource.getConnection();
-        Class<? extends Object> theClass = object.getClass();
-        StringBuilder statementBuilder = new StringBuilder();
-        Field[] fields = theClass.getDeclaredFields();
-        statementBuilder.append("INSERT INTO `").append(theClass.getSimpleName().toLowerCase()).append("` VALUES (");
-        for (int i = 0; i != fields.length; i++) {
-            if (!fields[i].getType().toString().equals("interface java.util.List")) {
-                statementBuilder.append("?");
-                if (i != (fields.length - 1)) {
-                    statementBuilder.append(", ");
+        try (Connection connection = hikariDataSource.getConnection()) {
+            Class<? extends Object> theClass = object.getClass();
+            StringBuilder statementBuilder = new StringBuilder();
+            Field[] fields = theClass.getDeclaredFields();
+            statementBuilder.append("INSERT INTO `").append(theClass.getSimpleName().toLowerCase()).append("` VALUES (");
+            for (int i = 0; i != fields.length; i++) {
+                if (!fields[i].getType().toString().equals("interface java.util.List")) {
+                    statementBuilder.append("?");
+                    if (i != (fields.length - 1)) {
+                        statementBuilder.append(", ");
+                    }
                 }
             }
+            statementBuilder.append(")");
+            PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder.toString());
+            addFields(fields, theClass, object, preparedStatement);
+            boolean returnThis = preparedStatement.executeUpdate() != 0;
+            if (hasRelationships(fields)) {
+                Object objectWithId = getObjectId(object);
+                Method getId = ReflectionMethods.getId(theClass);
+                Long id = (Long) getId.invoke(objectWithId);
+                Method setId = ReflectionMethods.setId(theClass, Long.class);
+                setId.invoke(object, id);
+                createRelationships(fields, theClass, object, this);
+            }
+            return returnThis;
         }
-        statementBuilder.append(")");
-        PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder.toString());
-        addFields(fields, theClass, object, preparedStatement);
-        logger.info(preparedStatement.toString());
-        boolean returnThis = preparedStatement.executeUpdate() != 0;
-        connection.commit();
-        connection.close();
-        if (hasRelationships(fields)) {
-            Object objectWithId = getObjectId(object);
-            Method getId = ReflectionMethods.getId(theClass);
-            Long id = (Long) getId.invoke(objectWithId);
-            Method setId = ReflectionMethods.setId(theClass, Long.class);
-            setId.invoke(object, id);
-            createRelationships(fields, theClass, object, this);
-        }
-        return returnThis;
     }
 
     @Override
     public Object read(Long id, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement("SELECT * from " + theClass.getSimpleName().toLowerCase() + " WHERE `id` = " + id + ";");
-        logger.info(preparedStatement.toString());
-        ResultSet resultSet = preparedStatement.executeQuery();
-        connection.close();
-        if (resultSet.next()) {
-            return getFromResultSet(resultSet, ReflectionMethods.getNewInstance(theClass));
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * from " + theClass.getSimpleName().toLowerCase() + " WHERE `id` = " + id + ";");
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                return getFromResultSet(resultSet, ReflectionMethods.getNewInstance(theClass));
+            }
+            return null;
         }
-        return null;
     }
 
     @Override
@@ -78,6 +73,18 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
         list.add(object);
         addInterfaceFieldsToObject(list, interfaceFields);
         return list.get(0);
+    }
+
+    @Override
+    public Object getIdFromUnique(String key, String value, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * from " + theClass.getSimpleName().toLowerCase() + " WHERE `" + key + "` = '" + value + "';");
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                return getFromResultSet(resultSet, ReflectionMethods.getNewInstance(theClass));
+            }
+            return null;
+        }
     }
 
     @Override
@@ -106,13 +113,12 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
 
     @Override
     public List readAll(Class theClass, boolean full) throws SQLException {
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement("SELECT * from " + theClass.getSimpleName().toLowerCase() + "");
-        logger.info(preparedStatement.toString());
-        ResultSet resultSet = preparedStatement.executeQuery();
-        List<BasicObjectInterface> returnThis = getAllFromResultSet(resultSet, theClass, full);
-        connection.close();
-        return returnThis;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement("SELECT * from " + theClass.getSimpleName().toLowerCase() + "");
+            ResultSet resultSet = preparedStatement.executeQuery();
+            List<BasicObjectInterface> returnThis = getAllFromResultSet(resultSet, theClass, full);
+            return returnThis;
+        }
     }
 
     @Override
@@ -126,15 +132,14 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
                 statement = "SELECT * FROM " + simpleName + " LIMIT " + resultCount;
             }
         } else {
-            statement = "SELECT * FROM " + simpleName + " LIMIT " + resultCount + "," + page;
+            statement = "SELECT * FROM " + simpleName + " LIMIT " + page + "," + resultCount;
         }
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(statement);
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        return getAllFromResultSet(resultSet, theClass, full);
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(statement);
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            return getAllFromResultSet(resultSet, theClass, full);
+        }
     }
 
     @Override
@@ -149,13 +154,12 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
             }
         }
         statement.append(";");
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        return getAllFromResultSet(resultSet, theClass, full);
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            return getAllFromResultSet(resultSet, theClass, full);
+        }
     }
 
     @Override
@@ -176,13 +180,12 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
         } else {
             statement.append(" LIMIT ").append(resultCount).append(",").append(page * resultCount);
         }
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        return getAllFromResultSet(resultSet, theClass, full);
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            return getAllFromResultSet(resultSet, theClass, full);
+        }
     }
 
     @Override
@@ -200,18 +203,32 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
                 if (page == 0) {
                     if (resultCount == 0) {
                         statement
-                            .append("(SELECT `id`, '")
-                            .append(theClassSimpleName.toLowerCase())
-                            .append("-")
-                            .append(orderBy).append("' AS mediaType FROM ")
-                            .append(theClassSimpleName)
-                            .append(" ORDER BY ")
-                            .append(orderBy)
-                            .append(" ")
-                            .append(ascDesc)
-                            .append(")");
+                                .append("(SELECT `id`, '")
+                                .append(theClassSimpleName.toLowerCase())
+                                .append("-")
+                                .append(orderBy).append("' AS mediaType FROM ")
+                                .append(theClassSimpleName)
+                                .append(" ORDER BY ")
+                                .append(orderBy)
+                                .append(" ")
+                                .append(ascDesc)
+                                .append(")");
                     } else {
                         statement
+                                .append("(SELECT `id`, '")
+                                .append(theClassSimpleName.toLowerCase())
+                                .append("-")
+                                .append(orderBy).append("' AS mediaType FROM ")
+                                .append(theClassSimpleName)
+                                .append(" ORDER BY ")
+                                .append(orderBy)
+                                .append(" ")
+                                .append(ascDesc)
+                                .append(" LIMIT ")
+                                .append(resultCount).append(")");
+                    }
+                } else {
+                    statement
                             .append("(SELECT `id`, '")
                             .append(theClassSimpleName.toLowerCase())
                             .append("-")
@@ -222,24 +239,10 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
                             .append(" ")
                             .append(ascDesc)
                             .append(" LIMIT ")
-                            .append(resultCount).append(")");
-                    }
-                } else {
-                    statement
-                        .append("(SELECT `id`, '")
-                        .append(theClassSimpleName.toLowerCase())
-                        .append("-")
-                        .append(orderBy).append("' AS mediaType FROM ")
-                        .append(theClassSimpleName)
-                        .append(" ORDER BY ")
-                        .append(orderBy)
-                        .append(" ")
-                        .append(ascDesc)
-                        .append(" LIMIT ")
-                        .append(resultCount)
-                        .append(",")
-                        .append(page * resultCount)
-                        .append(")");
+                            .append(resultCount)
+                            .append(",")
+                            .append(page * resultCount)
+                            .append(")");
                 }
                 if (i != (orderByList.size() - 1)) {
                     statement.append(" UNION ALL ");
@@ -251,13 +254,12 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
                 }
             }
         }
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        return resultSet;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(statement));
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            return resultSet;
+        }
     }
 
     @Override
@@ -275,44 +277,38 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
         Method getId = ReflectionMethods.getId(object.getClass());
         Long id = (Long) getId.invoke(object);
         statementBuilder.append(" WHERE id = ").append(id);
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder.toString());
-        addFields(fields, theClass, object, preparedStatement);
-        logger.info(preparedStatement.toString());
-        boolean returnThis = preparedStatement.executeUpdate() == 0;
-        connection.commit();
-        connection.close();
-        createRelationships(fields, theClass, object, this);
-        return returnThis;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder.toString());
+            addFields(fields, theClass, object, preparedStatement);
+            boolean returnThis = preparedStatement.executeUpdate() == 0;
+            createRelationships(fields, theClass, object, this);
+            return returnThis;
+        }
     }
 
     @Override
     public boolean delete(long id, Class theClass) throws SQLException {
         String statementBuilder = "DELETE FROM " + theClass.getSimpleName().toLowerCase() + " " + "WHERE " + "id" + "=?";
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder);
-        preparedStatement.setLong(1, id);
-        logger.info(preparedStatement.toString());
-        boolean returnThis = preparedStatement.executeUpdate() != 0;
-        connection.commit();
-        connection.close();
-        return returnThis;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(statementBuilder);
+            preparedStatement.setLong(1, id);
+            boolean returnThis = preparedStatement.executeUpdate() != 0;
+            return returnThis;
+        }
     }
 
     @Override
     public Long getTotal(Class theClass) throws SQLException {
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(*) AS COUNT FROM " + theClass.getSimpleName().toLowerCase());
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        if (resultSet.next()) {
-            Long returnThis = resultSet.getLong("COUNT");
-            connection.close();
-            return returnThis;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(*) AS COUNT FROM " + theClass.getSimpleName().toLowerCase());
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            if (resultSet.next()) {
+                Long returnThis = resultSet.getLong("COUNT");
+                return returnThis;
+            }
+            return null;
         }
-        connection.close();
-        return null;
     }
 
     @Override
@@ -323,13 +319,12 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
         } else {
             statement = "SELECT " + returnColumn + " from " + theClass.getSimpleName().toLowerCase() + " where " + searchColumn + " LIKE '%" + query + "%' LIMIT " + maxResultsSize;
         }
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(statement);
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        return getAllFromResultSet(resultSet, theClass, false);
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(statement);
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            return getAllFromResultSet(resultSet, theClass, false);
+        }
     }
 
     @Override
@@ -343,24 +338,23 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
             Method secondIdGetter = ReflectionMethods.getId(secondObject.getClass());
             Long secondId = (Long) secondIdGetter.invoke(secondObject);
             String stringBuilder = "INSERT INTO " +
-                relationTableName +
-                "(`" +
-                firstClassName +
-                "_id`, `" +
-                secondObjectName +
-                "_id`) VALUES ('" +
-                firstId +
-                "', '" +
-                secondId +
-                "');";
-            Connection connection = hikariDataSource.getConnection();
-            PreparedStatement preparedStatement = connection.prepareStatement(stringBuilder);
-            logger.info(preparedStatement.toString());
-            boolean returnThis = preparedStatement.executeUpdate() != 0;
-            connection.close();
-            return returnThis;
+                    relationTableName +
+                    "(`" +
+                    firstClassName +
+                    "_id`, `" +
+                    secondObjectName +
+                    "_id`) VALUES ('" +
+                    firstId +
+                    "', '" +
+                    secondId +
+                    "');";
+            try (Connection connection = hikariDataSource.getConnection()) {
+                PreparedStatement preparedStatement = connection.prepareStatement(stringBuilder);
+                boolean returnThis = preparedStatement.executeUpdate() != 0;
+                return returnThis;
+            }
         } else {
-            logger.error("Failed to create relation because table: " + relationTableName + " doesn't exist.");
+            System.err.println("Failed to create relation because table: " + relationTableName + " doesn't exist.");
         }
         return false;
     }
@@ -390,19 +384,18 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
             }
         }
         stringBuilder.append(";");
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(stringBuilder));
-        logger.info(preparedStatement.toString());
-        ResultSet resultSet = preparedStatement.executeQuery();
-        connection.close();
-        if (resultSet.next()) {
-            long id = resultSet.getLong("id");
-            Object newObject = ReflectionMethods.getNewInstance(objectClass);
-            Method setId = ReflectionMethods.setId(newObject.getClass(), Long.class);
-            setId.invoke(newObject, id);
-            return newObject;
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(String.valueOf(stringBuilder));
+            ResultSet resultSet = preparedStatement.executeQuery();
+            if (resultSet.next()) {
+                long id = resultSet.getLong("id");
+                Object newObject = ReflectionMethods.getNewInstance(objectClass);
+                Method setId = ReflectionMethods.setId(newObject.getClass(), Long.class);
+                setId.invoke(newObject, id);
+                return newObject;
+            }
+            return null;
         }
-        return null;
     }
 
     @Override
@@ -449,40 +442,39 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
             }
         }
         String statement = "SELECT " + selectString + " FROM " + declaringClassName + " " + joins + whereClauses;
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement(statement);
-        logger.info(preparedStatement.toString());
-        preparedStatement.execute();
-        ResultSet resultSet = preparedStatement.getResultSet();
-        connection.close();
-        //Extract to objects
-        while (resultSet.next()) {
-            Long objectColumnId = resultSet.getLong("id");
-            Object object = null;
-            for (BasicObjectInterface itObject : objects) {
-                if (itObject.getId().equals(objectColumnId)) {
-                    object = itObject;
-                    break;
-                }
-            }
-            for (Field field : fields) {
-                long columnId = resultSet.getLong(field.getName().toLowerCase() + "_id");
-                if (columnId != 0) {
-                    Method getList = ReflectionMethods.getGetter(field, object.getClass());
-                    List list = (List) getList.invoke(object);
-                    if (list == null) {
-                        list = new LinkedList();
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(statement);
+            preparedStatement.execute();
+            ResultSet resultSet = preparedStatement.getResultSet();
+            //Extract to objects
+            while (resultSet.next()) {
+                Long objectColumnId = resultSet.getLong("id");
+                Object object = null;
+                for (BasicObjectInterface itObject : objects) {
+                    if (itObject.getId().equals(objectColumnId)) {
+                        object = itObject;
+                        break;
                     }
-                    try {
-                        ParameterizedType pt = (ParameterizedType) field.getGenericType();
-                        Type subType = pt.getActualTypeArguments()[0];
-                        BasicObjectInterface basicObjectInterface = (BasicObjectInterface) ReflectionMethods.getNewInstance(Class.forName(subType.getTypeName()));
-                        basicObjectInterface.setId(columnId);
-                        list.add(basicObjectInterface);
-                        Method listSetter = ReflectionMethods.getSetter(field, object.getClass(), List.class);
-                        listSetter.invoke(object, list);
-                    } catch (ClassNotFoundException e) {
-                        throw new RuntimeException(e);
+                }
+                for (Field field : fields) {
+                    long columnId = resultSet.getLong(field.getName().toLowerCase() + "_id");
+                    if (columnId != 0) {
+                        Method getList = ReflectionMethods.getGetter(field, object.getClass());
+                        List list = (List) getList.invoke(object);
+                        if (list == null) {
+                            list = new LinkedList();
+                        }
+                        try {
+                            ParameterizedType pt = (ParameterizedType) field.getGenericType();
+                            Type subType = pt.getActualTypeArguments()[0];
+                            BasicObjectInterface basicObjectInterface = (BasicObjectInterface) ReflectionMethods.getNewInstance(Class.forName(subType.getTypeName()));
+                            basicObjectInterface.setId(columnId);
+                            list.add(basicObjectInterface);
+                            Method listSetter = ReflectionMethods.getSetter(field, object.getClass(), List.class);
+                            listSetter.invoke(object, list);
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                 }
             }
@@ -491,15 +483,15 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
 
     @Override
     public boolean tableExists(String tableName) throws SQLException {
-        Connection connection = hikariDataSource.getConnection();
-        PreparedStatement preparedStatement = connection.prepareStatement("SHOW TABLES LIKE '" + tableName + "';");
-        ResultSet resultSet = preparedStatement.executeQuery();
-        connection.close();
-        return resultSet.next();
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement("SHOW TABLES LIKE '" + tableName + "';");
+            ResultSet resultSet = preparedStatement.executeQuery();
+            return resultSet.next();
+        }
     }
 
     @Override
-    public boolean createTables(Class theClass) {
+    public boolean createTables(Class theClass) throws SQLException {
         Field[] fields = theClass.getDeclaredFields();
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE TABLE IF NOT EXISTS `").append(theClass.getSimpleName().toLowerCase()).append("` (");
@@ -532,7 +524,7 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
             } else if (boolean.class.equals(fieldClass)) {
                 sql.append("`").append(field.getName()).append("` bit(1) NULL, ");
             } else if (field.getType().isArray()) {
-                logger.info("ARRAYS ARE UNSUPPORTED");
+                System.out.println("ARRAYS ARE UNSUPPORTED");
             } else if (field.getType().isInterface()) {
                 String simpleLowerClass = theClass.getSimpleName().toLowerCase();
                 String simpleLowerFieldClass = field.getName().toLowerCase();
@@ -543,16 +535,9 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
                 constraintTables.append("KEY `").append(simpleLowerClass).append("` (`").append(simpleLowerClass).append("_id`),");
                 constraintTables.append("KEY `").append(simpleLowerFieldClass).append("` (`").append(simpleLowerFieldClass).append("_id`)");
                 constraintTables.append(") ENGINE=InnoDB DEFAULT CHARSET=latin1;");
-                try {
-                    Connection connection = hikariDataSource.getConnection();
+                try (Connection connection = hikariDataSource.getConnection()) {
                     PreparedStatement preparedStatement = connection.prepareStatement(constraintTables.toString());
-                    logger.info(preparedStatement.toString());
                     preparedStatement.execute();
-                    connection.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                    logger.error(String.valueOf(sql));
-                    return false;
                 }
             } else {
                 sql.append("`").append(field.getName()).append("` bigint(20) NULL, ");
@@ -560,16 +545,9 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
         }
         sql.append("PRIMARY KEY (`id`)");
         sql.append(") ENGINE=InnoDB DEFAULT CHARSET=latin1;");
-        try {
-            Connection connection = hikariDataSource.getConnection();
+        try (Connection connection = hikariDataSource.getConnection()) {
             PreparedStatement preparedStatement = connection.prepareStatement(sql.toString());
-            logger.info(String.valueOf(sql));
             preparedStatement.execute();
-            connection.close();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            logger.error(String.valueOf(sql));
-            return false;
         }
         return true;
     }
@@ -589,5 +567,25 @@ public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
     @Override
     public Long getTotalPages(int maxResultsSize, Class theClass) throws SQLException {
         return getTotalPages(maxResultsSize, theClass, this);
+    }
+
+    @Override
+    public List select(int maxResultsSize, List<KeyValue> clauses, String returnColumn, Class theClass) throws SQLException {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append("SELECT ").append(returnColumn).append(" from ").append(theClass.getSimpleName().toLowerCase()).append(" where ");
+        for (int i = 0; i < clauses.size(); i++) {
+            KeyValue keyValue = clauses.get(i);
+            if (i != clauses.size() - 1) {
+                stringBuilder.append("`").append(keyValue.getKey()).append("` = '").append(keyValue.getValue()).append("' AND ");
+            } else {
+                stringBuilder.append("`").append(keyValue.getKey()).append("` = '").append(keyValue.getValue()).append("'");
+            }
+        }
+        stringBuilder.append(" LIMIT ").append(maxResultsSize);
+        try (Connection connection = hikariDataSource.getConnection()) {
+            PreparedStatement preparedStatement = connection.prepareStatement(stringBuilder.toString());
+            ResultSet resultSet = preparedStatement.executeQuery();
+            return getAllFromResultSet(resultSet, theClass, false);
+        }
     }
 }

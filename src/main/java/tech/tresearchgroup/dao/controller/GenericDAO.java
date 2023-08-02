@@ -1,13 +1,12 @@
 package tech.tresearchgroup.dao.controller;
 
 import com.zaxxer.hikari.HikariDataSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tech.tresearchgroup.dao.controller.types.DatabaseType;
 import tech.tresearchgroup.dao.controller.types.MySQLDatabaseType;
 import tech.tresearchgroup.dao.controller.types.SQLiteDatabaseType;
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
 import tech.tresearchgroup.dao.model.DatabaseTypeEnum;
+import tech.tresearchgroup.systemframework.model.KeyValue;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
@@ -15,8 +14,7 @@ import java.sql.SQLException;
 import java.util.List;
 
 public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
-    private static final Logger logger = LoggerFactory.getLogger(GenericDAO.class);
-    private static DatabaseType genericDatabase;
+    private DatabaseType genericDatabase;
 
     public GenericDAO(HikariDataSource hikariDataSource,
                       DatabaseTypeEnum type,
@@ -28,7 +26,7 @@ public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
         }
         if (!tableExists(theClass.getSimpleName().toLowerCase())) {
             if (!createTables(theClass)) {
-                logger.info("Failed to create: " + theClass.getSimpleName().toLowerCase() + " tables!");
+                System.out.println("Failed to create: " + theClass.getSimpleName().toLowerCase() + " tables!");
             }
         }
     }
@@ -89,6 +87,11 @@ public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
     }
 
     @Override
+    public List select(int maxResultsSize, List<KeyValue> clauses, String returnColumn, Class theClass) throws SQLException {
+        return genericDatabase.select(maxResultsSize, clauses, returnColumn, theClass);
+    }
+
+    @Override
     public boolean createRelationship(Object firstObject, Object secondObject, String secondObjectName) throws SQLException, InvocationTargetException, IllegalAccessException {
         return genericDatabase.createRelationship(firstObject, secondObject, secondObjectName);
     }
@@ -109,7 +112,7 @@ public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
     }
 
     @Override
-    public boolean createTables(Class theClass) {
+    public boolean createTables(Class theClass) throws SQLException {
         return genericDatabase.createTables(theClass);
     }
 
@@ -121,5 +124,10 @@ public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
     @Override
     public List<BasicObjectInterface> getAllFromResultSet(ResultSet resultSet, Class theClass, boolean full) throws SQLException {
         return genericDatabase.getAllFromResultSet(resultSet, theClass, full);
+    }
+
+    @Override
+    public Object getIdFromUnique(String key, String value, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        return genericDatabase.getIdFromUnique(key, value, theClass);
     }
 }
