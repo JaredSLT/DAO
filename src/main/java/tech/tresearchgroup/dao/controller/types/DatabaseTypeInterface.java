@@ -9,7 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
-public interface DatabaseType {
+public interface DatabaseTypeInterface {
     boolean create(Object object) throws SQLException, InvocationTargetException, IllegalAccessException, InstantiationException, NoSuchMethodException;
 
     Object read(Long id, Class theClass) throws SQLException, InvocationTargetException, InstantiationException, IllegalAccessException;

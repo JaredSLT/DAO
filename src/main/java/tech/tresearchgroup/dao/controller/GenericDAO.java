@@ -1,9 +1,9 @@
 package tech.tresearchgroup.dao.controller;
 
 import com.zaxxer.hikari.HikariDataSource;
-import tech.tresearchgroup.dao.controller.types.DatabaseType;
-import tech.tresearchgroup.dao.controller.types.MySQLDatabaseType;
-import tech.tresearchgroup.dao.controller.types.SQLiteDatabaseType;
+import tech.tresearchgroup.dao.controller.types.DatabaseTypeInterface;
+import tech.tresearchgroup.dao.controller.types.MySQLDatabaseTypeInterface;
+import tech.tresearchgroup.dao.controller.types.SQLiteDatabaseTypeInterface;
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
 import tech.tresearchgroup.dao.model.DatabaseTypeEnum;
 import tech.tresearchgroup.systemframework.model.KeyValue;
@@ -14,15 +14,15 @@ import java.sql.SQLException;
 import java.util.List;
 
 public class GenericDAO extends BaseDAO implements GenericDatabaseAccessObject {
-    private DatabaseType genericDatabase;
+    private DatabaseTypeInterface genericDatabase;
 
     public GenericDAO(HikariDataSource hikariDataSource,
                       DatabaseTypeEnum type,
                       Class theClass) throws SQLException {
         if (type.equals(DatabaseTypeEnum.MYSQL)) {
-            genericDatabase = new MySQLDatabaseType(hikariDataSource);
+            genericDatabase = new MySQLDatabaseTypeInterface(hikariDataSource);
         } else {
-            genericDatabase = new SQLiteDatabaseType(hikariDataSource);
+            genericDatabase = new SQLiteDatabaseTypeInterface(hikariDataSource);
         }
         if (!tableExists(theClass.getSimpleName().toLowerCase())) {
             if (!createTables(theClass)) {

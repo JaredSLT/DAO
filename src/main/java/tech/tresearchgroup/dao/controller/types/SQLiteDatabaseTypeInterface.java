@@ -11,10 +11,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
-public class SQLiteDatabaseType extends BaseDAO implements DatabaseType {
+public class SQLiteDatabaseTypeInterface extends BaseDAO implements DatabaseTypeInterface {
     private final HikariDataSource hikariDataSource;
 
-    public SQLiteDatabaseType(HikariDataSource hikariDataSource) {
+    public SQLiteDatabaseTypeInterface(HikariDataSource hikariDataSource) {
         this.hikariDataSource = hikariDataSource;
     }
 

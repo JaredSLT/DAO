@@ -1,8 +1,6 @@
 package tech.tresearchgroup.dao.controller;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import tech.tresearchgroup.dao.controller.types.DatabaseType;
+import tech.tresearchgroup.dao.controller.types.DatabaseTypeInterface;
 import tech.tresearchgroup.dao.model.BasicObjectInterface;
 
 import java.lang.reflect.Field;
@@ -83,19 +81,19 @@ public abstract class BaseDAO {
     public void createRelationships(Field[] fields,
                                     Class theClass,
                                     Object object,
-                                    DatabaseType databaseType) throws InvocationTargetException, IllegalAccessException, SQLException, InstantiationException, NoSuchMethodException {
+                                    DatabaseTypeInterface databaseTypeInterface) throws InvocationTargetException, IllegalAccessException, SQLException, InstantiationException, NoSuchMethodException {
         for (Field field : fields) {
             Method method = ReflectionMethods.getGetter(field, theClass);
             if (field.getType().equals(List.class)) {
                 List list = (List) method.invoke(object);
                 if (list != null) {
                     for (Object listObject : list) {
-                        databaseType.create(listObject);
+                        databaseTypeInterface.create(listObject);
                     }
-                    List withIds = databaseType.getObjectByIds(list);
+                    List withIds = databaseTypeInterface.getObjectByIds(list);
                     if (withIds.size() > 0) {
                         for (Object listObject : withIds) {
-                            databaseType.createRelationship(object, listObject, field.getName());
+                            databaseTypeInterface.createRelationship(object, listObject, field.getName());
                         }
                     }
                 }
@@ -172,8 +170,8 @@ public abstract class BaseDAO {
         return objects;
     }
 
-    public Long getTotalPages(int maxResultsSize, Class theClass, DatabaseType databaseType) throws SQLException {
-        long total = databaseType.getTotal(theClass);
+    public Long getTotalPages(int maxResultsSize, Class theClass, DatabaseTypeInterface databaseTypeInterface) throws SQLException {
+        long total = databaseTypeInterface.getTotal(theClass);
         if (total != 0) {
             return total / (maxResultsSize + 1);
         }

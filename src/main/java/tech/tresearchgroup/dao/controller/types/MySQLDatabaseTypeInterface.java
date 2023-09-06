@@ -15,10 +15,10 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 
-public class MySQLDatabaseType extends BaseDAO implements DatabaseType {
+public class MySQLDatabaseTypeInterface extends BaseDAO implements DatabaseTypeInterface {
     private final HikariDataSource hikariDataSource;
 
-    public MySQLDatabaseType(HikariDataSource hikariDataSource) {
+    public MySQLDatabaseTypeInterface(HikariDataSource hikariDataSource) {
         this.hikariDataSource = hikariDataSource;
     }
 
